@@ -10,23 +10,25 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 public class Basket {
     Map<Integer, Product> productMap;
+    Map<Integer, Integer> stock;
     Map<Product, Integer> requestedProducts = new HashMap<>();
     Map<String, Double> discountCodes = new HashMap<>();
 
-    public Basket(Map<Integer, Product> productMap) {
+    public Basket(Map<Integer, Product> productMap, Map<Integer, Integer> stock) {
         this.productMap = productMap;
+        this.stock = stock;
         setDiscountCodes();
     }
 
     private void setDiscountCodes() {
+        this.discountCodes.put("SALE00",1.0);
         this.discountCodes.put("SALE10",0.9);
         this.discountCodes.put("SALE20",0.8);
-        this.discountCodes.put("",1.0);
+        this.discountCodes.put("N",1.0);
     }
 
     public void fillBasket() {
-        boolean ending = false;
-        while(!ending) {
+        while(true) {
             int IDToBuy = IOTools.readInt("ID of product to buy: ");
             int amount = IOTools.readInt("How many? ");
             try {
@@ -37,17 +39,14 @@ public class Basket {
             } catch(BasketExceptionNonRepeatable e) {
                 System.out.println(e.getMessage());
             }
-            if(IOTools.readString("End? (y/n) ").toLowerCase().equals("y")) {
-                ending = true;
-                continue;
-            }
+            if(IOTools.readString("End? (y/n) ").toLowerCase().equals("y")) break;
             printProducts();
         }
         while(true) {
             try {
                 System.out.println(
                         "total: " +
-                        total(IOTools.readString("Discount code: (empty if none) ")) +
+                        total(IOTools.readString("Discount code: (n = none) ")) +
                         " €"
                 );
                 break;
@@ -59,29 +58,34 @@ public class Basket {
 
     private void addProduct(int productID, int amount) throws BasketExceptionRepeatable, BasketExceptionNonRepeatable {
         if(this.productMap.get(productID) == null) {
-            throw new BasketExceptionRepeatable("EXCEPTION: this ID does not exist!");
+            throw new BasketExceptionRepeatable("this ID does not exist!");
         }
         if(amount <= 0) {
-            throw new BasketExceptionRepeatable("EXCEPTION: amount too small!");
+            throw new BasketExceptionRepeatable("amount too small!");
+        }
+        if(this.requestedProducts.get(this.productMap.get(productID)) != null) {
+            int tmp = this.requestedProducts.get(this.productMap.get(productID));
+            this.requestedProducts.replace(this.productMap.get(productID), tmp + amount);
+            throw new BasketExceptionNonRepeatable("product " +
+                    this.productMap.get(productID).getName() +
+                    " is already in your basket!");
         }
         this.requestedProducts.put(this.productMap.get(productID), amount);
-        if(this.requestedProducts.get(this.productMap.get(productID)) != null) {
-            throw new BasketExceptionNonRepeatable("EXCEPTION: product " +
-                    this.productMap.get(productID).getName() +
-                    "is already in your basket!");
-        }
     }
 
-    private void printProducts() {
+    public void printProducts() {
         System.out.println("Available products: ");
         this.productMap.forEach((ID, product) -> {
-            System.out.println("ID: " + ID + " " + product.getName() + " " + product.getPrice() + " € ");
+            if(this.stock.get(ID) > 0) {
+                System.out.println("ID: " + ID + " " + product.getName() + " " + product.getPrice() + " € QTY: "
+                + this.stock.get(ID));
+            }
         });
         System.out.println();
     }
 
-    private int total(String code) throws DiscountException {
-        if(code.length() != 6) throw new DiscountException("Invalid code length!");
+    private double total(String code) throws DiscountException {
+        if(code.length() != 6 && !code.equals("n")) throw new DiscountException("Invalid code length!");
         for (char c : code.toCharArray()) {
             if(!Character.isLetterOrDigit(c)) throw new DiscountException("Invalid code format!");
         }
